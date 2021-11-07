@@ -85,7 +85,7 @@ class PixelApp(QMainWindow):
             self.buildDisplay()
 
     def loadClicked(self):
-        fname,filter=QFileDialog.getOpenFileName(self,'Open File','.',"Image Files(*.jpg *.png *.gif)")
+        fname, filter=QFileDialog.getOpenFileName(self,'Open File','imgs/',"Image Files(*.jpg *.png *.gif)")
         if fname:
             self.loadImage(fname)
         else:
@@ -106,12 +106,12 @@ class PixelApp(QMainWindow):
 
     def buildDisplay(self):
         # First show the grid version of the pixels
-        self.displayImage = np.zeros((self.viewportHeight,self.viewportWidth,3), np.uint8)
+        self.displayImage = np.zeros((self.viewportHeight, self.viewportWidth,3), np.uint8)
         for y in range(self.h):
             for x in range(self.w):
                 color = self.rawImage[self.offsetY + y, self.offsetX+x]
                 cv2.rectangle(self.displayImage, 
-                         ((x * (self.s + self.b)), (y * ( self.s + self.b))), 
+                         ((x * (self.s + self.b)), (y * (self.s + self.b))), 
                           (((x+1) * (self.s + self.b)) - 1, ((y+1) * (self.s + self.b) - 1)),
                         (int(color[0]),int(color[1]),int(color[2])),
                         -1)
@@ -131,8 +131,8 @@ class PixelApp(QMainWindow):
         
         # determine how much to scale the rawImage so that it fits within the
         # overviewHeight and overviewWidth but without distorting the ratio.
-        ratio = min( self.overviewHeight / self.rawImage.shape[0], self.overviewWidth / self.rawImage.shape[1] )
-        print( f"overviewSize: {self.overviewWidth}, {self.overviewHeight}, rawImageSize: {self.rawImage.shape[1]},{self.rawImage.shape[0]}, ratio: {ratio}")
+        ratio = min(self.overviewHeight / self.rawImage.shape[0], self.overviewWidth / self.rawImage.shape[1] )
+        print(f"overviewSize: {self.overviewWidth}, {self.overviewHeight}, rawImageSize: {self.rawImage.shape[1]},{self.rawImage.shape[0]}, ratio: {ratio}")
 
         rawImageResized = cv2.resize(self.rawImage, (0,0), fx=ratio, fy=ratio)
 
@@ -143,7 +143,7 @@ class PixelApp(QMainWindow):
         x1 = int((self.offsetX+self.w) * ratio)
         y1 = int((self.offsetY+self.h) * ratio)
 
-        print( f"region: ({x0},{y0}) -> ({x1},{y1}) for offsetX: {self.offsetX}, offsetY: {self.offsetY}")
+        print(f"region: ({x0},{y0}) -> ({x1},{y1}) for offsetX: {self.offsetX}, offsetY: {self.offsetY}")
 
         cv2.rectangle(rawImageResized, 
                 (x0, y0),
@@ -161,13 +161,11 @@ class PixelApp(QMainWindow):
         self.overviewImageFrame.setPixmap(QtGui.QPixmap.fromImage(image))
 
 
-
-
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
     pixelApp = PixelApp()
-    pixelApp.loadImage("SpriteSheet1.jpg")
+    pixelApp.loadImage("imgs/SpriteSheet3.png")
     pixelApp.show()
 
     sys.exit(app.exec_())
