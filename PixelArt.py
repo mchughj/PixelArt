@@ -19,8 +19,9 @@ class GenerateAnimatedGifDialog(QDialog):
     def __init__(self, app):
         super(GenerateAnimatedGifDialog, self).__init__()
         self.image = app.rawImage.copy()
-        self.offsetX = app.offsetX
-        self.offsetY = app.offsetY
+        self.app = app
+        self.offsetX = self.app.offsetX
+        self.offsetY = self.app.offsetY
         uic.loadUi('Dialog-NumberFrames.ui', self)
 
         # Set some good defaults for our text boxes
@@ -29,13 +30,13 @@ class GenerateAnimatedGifDialog(QDialog):
         self.frameDelayWidget.setText(str(75))
 
         # Number of frames until the edge of the image.
-        imageFramesUntilEnd = int((self.image.shape[0] - self.offsetX) / PIXEL_WIDTH )
+        imageFramesUntilEnd = int((self.image.shape[1] - self.offsetX) / PIXEL_WIDTH ) + 1
         self.numberFramesWidget.setText(str(imageFramesUntilEnd))
 
         proposedFilename = ""
         proposedFileIndex = 1
         while True:
-            proposedFilename = "{base}-{proposedFileIndex}.gif".format(base=app.filename[0:-4], proposedFileIndex=proposedFileIndex)
+            proposedFilename = "{base}-{proposedFileIndex}.gif".format(base=self.app.filename[0:-4], proposedFileIndex=proposedFileIndex)
             print(f"proposedFilename: {proposedFilename}")
             if not os.path.isfile(proposedFilename):
                 break
@@ -91,6 +92,12 @@ class GenerateAnimatedGifDialog(QDialog):
         firstFrame = frames[0]
         firstFrame.save(self.filenameWidget.text(), format="GIF", append_images=frames,
                save_all=True, duration=frameDelayMs, loop=0)
+
+        # Reset my offset so I'm back at the start.  This is important if/when
+        # we keep the dialog box open and allow for fast turnaround of many
+        # different images or settings.
+        self.offsetX = self.app.offsetX
+        self.offsetY = self.app.offsetY
 
 
 class PixelApp(QMainWindow):
@@ -169,7 +176,7 @@ class PixelApp(QMainWindow):
                 if width > 0:
                     ratio = PIXEL_WIDTH / width 
                 if height > 0:
-                    ratio = min(ratio, 32 / PIXEL_HEIGHT)
+                    ratio = min(ratio, PIXEL_HEIGHT / height)
 
                 print(f"second scale point determined {ratio}")
                 if ratio != 100:
@@ -179,7 +186,7 @@ class PixelApp(QMainWindow):
 
                 self.scalePoint1 = None
         elif k == QtCore.Qt.Key_S:
-            self.rescaleImage(0.5)
+            self.rescaleImage(0.24806201550387597)
         elif k == QtCore.Qt.Key_B:
             self.rescaleImage(2)
         event.accept()
@@ -219,7 +226,7 @@ class PixelApp(QMainWindow):
 
     def buildDisplay(self):
         # First show the grid version of the pixels
-        self.statusBar.showMessage( f"{self.offsetX},{self.offsetY} -> {self.offsetX+PIXEL_WIDTH},{self.offsetY + PIXEL_HEIGHT} of {self.rawImage.shape[1]}x{self.rawImage.shape[0]}")
+        self.statusBar.showMessage( f"File: {self.filename} {' '*(120-len(self.filename))} {self.offsetX},{self.offsetY} -> {self.offsetX+PIXEL_WIDTH},{self.offsetY + PIXEL_HEIGHT} of {self.rawImage.shape[1]}x{self.rawImage.shape[0]}")
         self.displayImage = np.zeros((self.viewportHeight, self.viewportWidth,3), np.uint8)
         for y in range(self.h):
             for x in range(self.w):
