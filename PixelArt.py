@@ -42,44 +42,55 @@ class GenerateAnimatedGifDialog(QDialog):
             proposedFileIndex += 1
         self.filenameWidget.setText(proposedFilename)
 
+        self.frameColumnBoundaryWidget.setText(str(imageFramesUntilEnd))
+
 
     def _getNextLocation(self):
         resultX = self.offsetX
         resultY = self.offsetY
 
         self.offsetX += self.strideX
-        if self.offsetX + PIXEL_WIDTH - 1 >= self.image.shape[1]:
+        if self.offsetX + PIXEL_WIDTH > self.boundaryX:
             self.offsetX = 0
             self.offsetY += self.strideY
 
             # Make sure that I haven't gone too far and wrap around if I have.
-            if self.offsetY + PIXEL_HEIGHT - 1 >= self.image.shape[0]:
+            if self.offsetY + PIXEL_HEIGHT > self.image.shape[0]:
                 self.offsetX = 0
                 self.offsetY = 0
 
         return (resultX, resultY)
 
-    def _getNextFrame(self):
+    def _getNextFrame(self, frameNumber):
         (x,y) = self._getNextLocation()
+
+        print( f"getNextFrame {frameNumber} goes from {x},{y} to {x+PIXEL_WIDTH},{y+PIXEL_HEIGHT}")
         roi = self.image[y:y+PIXEL_HEIGHT,x:x+PIXEL_WIDTH]
+
         pilImage = Image.fromarray(roi)
         return pilImage
 
     def accept(self):
         numberFrames = int(self.numberFramesWidget.text())
         frameDelayMs = int(self.frameDelayWidget.text())
+
         self.strideX = int(self.strideXWidget.text())
         self.strideY = int(self.strideYWidget.text())
-        print( f"accept - generating frames;  numberFrames: {numberFrames}")
+        self.boundaryX = int(self.frameColumnBoundaryWidget.text()) * PIXEL_WIDTH + self.offsetX
+
+        print(f"accept - generating frames;  numberFrames: {numberFrames}, strideX: {self.strideX}, strideY: {self.strideY}, boundaryX: {self.boundaryX}")
+        print(f"accept - image specifications; shape: {self.image.shape}")
         frames = []
         for i in range(numberFrames):
-            frames.append(self._getNextFrame())
+            try:
+                frames.append(self._getNextFrame(i))
+            except ValueError:
+                print(f"accept - unable to get frame {i}")
+                pass
 
         firstFrame = frames[0]
         firstFrame.save(self.filenameWidget.text(), format="GIF", append_images=frames,
                save_all=True, duration=frameDelayMs, loop=0)
-
-        self.close()
 
 
 class PixelApp(QMainWindow):
@@ -87,12 +98,9 @@ class PixelApp(QMainWindow):
         super(PixelApp, self).__init__()
         uic.loadUi('PixelArt.ui', self)
 
-        self.leftButton.clicked.connect(lambda: self.moveViewport(-1,0))
-        self.rightButton.clicked.connect(lambda: self.moveViewport(1,0))
-        self.upButton.clicked.connect(lambda: self.moveViewport(0,-1))
-        self.downButton.clicked.connect(lambda: self.moveViewport(0,1))
         self.actionLoad.triggered.connect(self.loadClicked)
         self.actionGenerate.triggered.connect(self.generateClicked)
+        self.actionExit.triggered.connect(self.close)
 
         self.offsetX = 0
         self.offsetY = 0
@@ -112,6 +120,7 @@ class PixelApp(QMainWindow):
 
         self.rawImage = None
         self.filename = None
+        self.scalePoint1 = None
 
     def generateClicked(self):
         dlg = GenerateAnimatedGifDialog(self)
@@ -128,26 +137,50 @@ class PixelApp(QMainWindow):
         self.offsetY = max(0, min(self.rawImage.shape[0]-self.h, self.offsetY))
 
     def keyPressEvent(self, event):
-        print(f"got keystroke: {event.key()}")
         modifiers = QtWidgets.QApplication.keyboardModifiers()
         deltaMovementX = 1
         deltaMovementY = 1
         if (modifiers & QtCore.Qt.ShiftModifier) == QtCore.Qt.ShiftModifier:
             deltaMovementX = self.w
             deltaMovementY = self.h
-        if event.key() == QtCore.Qt.Key_Q:
+        k = event.key()
+        if k == QtCore.Qt.Key_Q or k == QtCore.Qt.Key_Escape:
             self.deleteLater()
-        elif event.key() == QtCore.Qt.Key_H:
+        elif k == QtCore.Qt.Key_H or k == QtCore.Qt.Key_Left:
             self.moveViewport(-deltaMovementX,0)
-        elif event.key() == QtCore.Qt.Key_J:
+        elif k == QtCore.Qt.Key_J or k == QtCore.Qt.Key_Down:
             self.moveViewport(0,deltaMovementY)
-        elif event.key() == QtCore.Qt.Key_K:
+        elif k == QtCore.Qt.Key_K or k == QtCore.Qt.Key_Up:
             self.moveViewport(0,-deltaMovementY)
-        elif event.key() == QtCore.Qt.Key_L:
+        elif k == QtCore.Qt.Key_L or k == QtCore.Qt.Key_Right:
             self.moveViewport(deltaMovementX,0)
-        elif event.key() == QtCore.Qt.Key_S:
+        elif k == QtCore.Qt.Key_P:
+            if self.scalePoint1 == None:
+                print(f"beginning scale point operation; {self.offsetX}, {self.offsetY}")
+                self.scalePoint1 = (self.offsetX, self.offsetY)
+            else:
+                print(f"second scale point entered; {self.offsetX}, {self.offsetY}")
+                width = self.offsetX - self.scalePoint1[0] + PIXEL_WIDTH
+                height = self.offsetY - self.scalePoint1[1] + PIXEL_HEIGHT
+
+                print(f"second scale point entered; {self.offsetX}, {self.offsetY} - width: {width}, height: {height}")
+
+                ratio = 100
+                if width > 0:
+                    ratio = PIXEL_WIDTH / width 
+                if height > 0:
+                    ratio = min(ratio, 32 / PIXEL_HEIGHT)
+
+                print(f"second scale point determined {ratio}")
+                if ratio != 100:
+                    self.offsetX = self.scalePoint1[0]
+                    self.offsetY = self.scalePoint1[1]
+                    self.rescaleImage(ratio)
+
+                self.scalePoint1 = None
+        elif k == QtCore.Qt.Key_S:
             self.rescaleImage(0.5)
-        elif event.key() == QtCore.Qt.Key_B:
+        elif k == QtCore.Qt.Key_B:
             self.rescaleImage(2)
         event.accept()
 
@@ -172,7 +205,9 @@ class PixelApp(QMainWindow):
         self.filename = filename
         self.offsetX = 0
         self.offsetY = 0
-        self.rawImage = cv2.imread(filename)
+        bgrImage = cv2.imread(filename)
+        self.rawImage = cv2.cvtColor(bgrImage, cv2.COLOR_BGR2RGB)
+
         assert len(self.rawImage.shape)==3
 
         if self.rawImage.shape[2] ==4:
@@ -184,6 +219,7 @@ class PixelApp(QMainWindow):
 
     def buildDisplay(self):
         # First show the grid version of the pixels
+        self.statusBar.showMessage( f"{self.offsetX},{self.offsetY} -> {self.offsetX+PIXEL_WIDTH},{self.offsetY + PIXEL_HEIGHT} of {self.rawImage.shape[1]}x{self.rawImage.shape[0]}")
         self.displayImage = np.zeros((self.viewportHeight, self.viewportWidth,3), np.uint8)
         for y in range(self.h):
             for x in range(self.w):
@@ -200,7 +236,6 @@ class PixelApp(QMainWindow):
                 self.displayImage.shape[0], 
                 self.displayImage.strides[0],
                 self.qformat)
-        image.rgbSwapped()
         self.imageFrame.setPixmap(QtGui.QPixmap.fromImage(image))
 
         # Next draw the holistic view of the entire image along with what we
@@ -210,7 +245,6 @@ class PixelApp(QMainWindow):
         # determine how much to scale the rawImage so that it fits within the
         # overviewHeight and overviewWidth but without distorting the ratio.
         ratio = min(self.overviewHeight / self.rawImage.shape[0], self.overviewWidth / self.rawImage.shape[1] )
-        print(f"overviewSize: {self.overviewWidth}, {self.overviewHeight}, rawImageSize: {self.rawImage.shape[1]},{self.rawImage.shape[0]}, ratio: {ratio}")
 
         rawImageResized = cv2.resize(self.rawImage, (0,0), fx=ratio, fy=ratio)
 
@@ -220,8 +254,6 @@ class PixelApp(QMainWindow):
 
         x1 = int((self.offsetX+self.w) * ratio)
         y1 = int((self.offsetY+self.h) * ratio)
-
-        print(f"region: ({x0},{y0}) -> ({x1},{y1}) for offsetX: {self.offsetX}, offsetY: {self.offsetY}")
 
         cv2.rectangle(rawImageResized, 
                 (x0, y0),
@@ -235,7 +267,6 @@ class PixelApp(QMainWindow):
                 rawImageResized.shape[0], 
                 rawImageResized.strides[0],
                 QtGui.QImage.Format_RGB888)
-        image.rgbSwapped()
         self.overviewImageFrame.setPixmap(QtGui.QPixmap.fromImage(image))
 
 
@@ -243,7 +274,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
 
     pixelApp = PixelApp()
-    pixelApp.loadImage("imgs/SpriteSheet3.png")
+    pixelApp.loadImage("imgs/SpriteSheet2.jpg")
     pixelApp.show()
 
     sys.exit(app.exec_())
