@@ -1,7 +1,9 @@
 
 # Pixel Art
 
-Looking at expanding the images that I'm seeing in my PixelPanel.
+A tool to convert sprite sheets into animated gifs.  Like this: ![Example](imgs/SpriteSheet3-3.gif)
+
+## Getting started
 
 In the below if your default 'python' is python3 then change the below commands to just be 'python'.
 
@@ -40,3 +42,6 @@ In the below if your default 'python' is python3 then change the below commands 
    ```
    python3 PixelArt.py
    ```
+
+## Additional
+There is no real documentation here beyond the code.  IF necessary then I will augment at some future date.
