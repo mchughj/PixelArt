@@ -2,6 +2,9 @@ import sys
 
 import cv2
 import numpy as np
+import os
+
+from PIL import Image 
 
 from PyQt5 import uic, QtGui, QtCore, QtWidgets
 from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QLabel, QFileDialog, QDialog
@@ -15,12 +18,68 @@ BORDER = 1
 class GenerateAnimatedGifDialog(QDialog):
     def __init__(self, app):
         super(GenerateAnimatedGifDialog, self).__init__()
-        self.app = app
+        self.image = app.rawImage.copy()
+        self.offsetX = app.offsetX
+        self.offsetY = app.offsetY
         uic.loadUi('Dialog-NumberFrames.ui', self)
 
+        # Set some good defaults for our text boxes
+        self.strideXWidget.setText(str(PIXEL_WIDTH))
+        self.strideYWidget.setText(str(PIXEL_HEIGHT))
+        self.frameDelayWidget.setText(str(75))
+
+        # Number of frames until the edge of the image.
+        imageFramesUntilEnd = int((self.image.shape[0] - self.offsetX) / PIXEL_WIDTH )
+        self.numberFramesWidget.setText(str(imageFramesUntilEnd))
+
+        proposedFilename = ""
+        proposedFileIndex = 1
+        while True:
+            proposedFilename = "{base}-{proposedFileIndex}.gif".format(base=app.filename[0:-4], proposedFileIndex=proposedFileIndex)
+            print(f"proposedFilename: {proposedFilename}")
+            if not os.path.isfile(proposedFilename):
+                break
+            proposedFileIndex += 1
+        self.filenameWidget.setText(proposedFilename)
+
+
+    def _getNextLocation(self):
+        resultX = self.offsetX
+        resultY = self.offsetY
+
+        self.offsetX += self.strideX
+        if self.offsetX + PIXEL_WIDTH - 1 >= self.image.shape[1]:
+            self.offsetX = 0
+            self.offsetY += self.strideY
+
+            # Make sure that I haven't gone too far and wrap around if I have.
+            if self.offsetY + PIXEL_HEIGHT - 1 >= self.image.shape[0]:
+                self.offsetX = 0
+                self.offsetY = 0
+
+        return (resultX, resultY)
+
+    def _getNextFrame(self):
+        (x,y) = self._getNextLocation()
+        roi = self.image[y:y+PIXEL_HEIGHT,x:x+PIXEL_WIDTH]
+        pilImage = Image.fromarray(roi)
+        return pilImage
 
     def accept(self):
-        print("I should generate the images now")
+        numberFrames = int(self.numberFramesWidget.text())
+        frameDelayMs = int(self.frameDelayWidget.text())
+        self.strideX = int(self.strideXWidget.text())
+        self.strideY = int(self.strideYWidget.text())
+        print( f"accept - generating frames;  numberFrames: {numberFrames}")
+        frames = []
+        for i in range(numberFrames):
+            frames.append(self._getNextFrame())
+
+        firstFrame = frames[0]
+        firstFrame.save(self.filenameWidget.text(), format="GIF", append_images=frames,
+               save_all=True, duration=frameDelayMs, loop=0)
+
+        self.close()
 
 
 class PixelApp(QMainWindow):
@@ -52,6 +111,7 @@ class PixelApp(QMainWindow):
         self.overviewHeight = self.overviewImageFrame.height()
 
         self.rawImage = None
+        self.filename = None
 
     def generateClicked(self):
         dlg = GenerateAnimatedGifDialog(self)
@@ -109,6 +169,7 @@ class PixelApp(QMainWindow):
             print('No image selected')
 
     def loadImage(self, filename):
+        self.filename = filename
         self.offsetX = 0
         self.offsetY = 0
         self.rawImage = cv2.imread(filename)
