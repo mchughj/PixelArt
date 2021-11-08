@@ -4,12 +4,24 @@ import cv2
 import numpy as np
 
 from PyQt5 import uic, QtGui, QtCore, QtWidgets
-from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QLabel, QFileDialog
+from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QLabel, QFileDialog, QDialog
 
 PIXEL_WIDTH=32
 PIXEL_HEIGHT=32
 SCALE = 19
 BORDER = 1
+
+
+class GenerateAnimatedGifDialog(QDialog):
+    def __init__(self, app):
+        super(GenerateAnimatedGifDialog, self).__init__()
+        self.app = app
+        uic.loadUi('Dialog-NumberFrames.ui', self)
+
+
+    def accept(self):
+        print("I should generate the images now")
+
 
 class PixelApp(QMainWindow):
     def __init__(self):
@@ -21,6 +33,7 @@ class PixelApp(QMainWindow):
         self.upButton.clicked.connect(lambda: self.moveViewport(0,-1))
         self.downButton.clicked.connect(lambda: self.moveViewport(0,1))
         self.actionLoad.triggered.connect(self.loadClicked)
+        self.actionGenerate.triggered.connect(self.generateClicked)
 
         self.offsetX = 0
         self.offsetY = 0
@@ -39,6 +52,10 @@ class PixelApp(QMainWindow):
         self.overviewHeight = self.overviewImageFrame.height()
 
         self.rawImage = None
+
+    def generateClicked(self):
+        dlg = GenerateAnimatedGifDialog(self)
+        dlg.exec()
 
     def moveViewport(self, deltaX, deltaY):
         self.offsetX += deltaX
